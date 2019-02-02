@@ -4,7 +4,6 @@ import { difference } from 'lodash';
 import { createInterface } from 'readline';
 import * as teamMap  from './teams.json';
 
-
 const getOpenPulls = async (githubToken: string) => {
   const octokit = new Octokit({ auth: `token ${githubToken}` });
   return await octokit.pulls.list({ owner: 'cleodev', repo: 'crowsnest', state: 'open' });
@@ -77,11 +76,13 @@ export const main = async (options: {
   cycle: 'START' | 'SHUTDOWN';
   teams: Array<'MEATBALLS' | 'SLYTHERINS' | "INCOGNITOS">;
   skipPrs: number[];
-  skipPrompt: boolean
+  skipPrompt: boolean;
 }) => {
   const openPulls = await getOpenPulls(options.githubToken);
-  const people: string[] = options.teams.reduce((accum, teamName) => [...accum, ...teamMap[teamName]], []);
-  const teamPulls = openPulls.data.filter(pull => people.indexOf(pull.user.login) >= 0);
+  const people: string[] = options.teams
+    .reduce((accum, teamName) => [...accum, ...teamMap[teamName]], [])
+    .map(person => person.toLowerCase());
+  const teamPulls = openPulls.data.filter(pull => people.indexOf(pull.user.login.toLowerCase()) >= 0);
   const pulls = teamPulls.map(pull => ({
     num: pull.number,
     title: pull.title,
