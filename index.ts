@@ -53,7 +53,7 @@ const cli = meow(`
     await main({
       githubToken: ghToken,
       region: rdsRegion,
-      cycle: cycle,
+      cycle: cycle.map(c => c.toUpperCase()),
       teams: teams.split(',').map(t => t.toUpperCase().trim()).filter(Boolean),
       skipPrs: skipPrs.split(',').map(pr => pr.trim()).filter(Boolean).map(Number)
     })

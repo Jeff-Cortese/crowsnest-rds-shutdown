@@ -68,5 +68,10 @@ export const main = async (options: {
     case 'SHUTDOWN':
       await shutdownPullRds(options.region, pullsWithoutSkipped);
       break;
+
+    default:
+      console.error('cycle option must be either SHUTDOWN or STARTUP');
+      process.exit(1);
+      break;
   }
 };
