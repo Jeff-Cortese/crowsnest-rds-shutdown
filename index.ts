@@ -9,8 +9,9 @@ const cli = meow(`
       --gh-token,    Personal access token used to query repo for open pull requests
       --rds-region,  The region in which to shut down DBs (defaults to us-west-2)
       --cycle,       SHUTDOWN | START (defaults to SHUTDOWN)
-      --teams,       Shutdown/Startup DBs for these teams (comma delimited) (ex: meatballs, slytherins)
-      --skip-prs,    comma delimited list of PR numbers to skip (ex: 1234, 4321)
+      --teams,       Shutdown/Startup DBs for these teams (comma delimited) (ex: meatballs,slytherins)
+      --skip-prs,    Comma delimited list of PR numbers to skip (ex: 1234,4321)
+      --yes, y       Don't prompt for confirmation.
 `, {
   flags: {
     'rds-region': {
@@ -26,6 +27,10 @@ const cli = meow(`
     },
     skipPrs: {
       type: 'string'
+    },
+    yes: {
+      type: 'boolean',
+      alias: 'y',
     }
   }
 });
@@ -41,7 +46,8 @@ const cli = meow(`
       rdsRegion,
       cycle,
       teams,
-      skipPrs
+      skipPrs,
+      yes
     } = cli.flags;
 
     if (!ghToken || !teams) {
@@ -53,11 +59,13 @@ const cli = meow(`
     await main({
       githubToken: ghToken,
       region: rdsRegion,
-      cycle: cycle.map(c => c.toUpperCase()),
+      cycle: cycle.toUpperCase(),
       teams: teams.split(',').map(t => t.toUpperCase().trim()).filter(Boolean),
-      skipPrs: skipPrs.split(',').map(pr => pr.trim()).filter(Boolean).map(Number)
-    })
+      skipPrs: skipPrs.split(',').map(pr => pr.trim()).filter(Boolean).map(Number),
+      skipPrompt: yes
+    });
 
+    process.exit(0);
   } catch (error) {
     console.error('Unhandled Error:');
     console.error(error);

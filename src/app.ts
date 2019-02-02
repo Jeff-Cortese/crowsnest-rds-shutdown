@@ -1,6 +1,7 @@
 import * as Octokit from '@octokit/rest';
 import { RDS } from 'aws-sdk';
 import { difference } from 'lodash';
+import { createInterface } from 'readline';
 import * as teamMap  from './teams.json';
 
 
@@ -9,11 +10,34 @@ const getOpenPulls = async (githubToken: string) => {
   return await octokit.pulls.list({ owner: 'cleodev', repo: 'crowsnest', state: 'open' });
 };
 
-const shutdownPullRds = async (region: string, prNumbers: number[]) => {
+const shutdownPullRds = async (region: string, pulls: { num: number; title: string; author: string; }[], skipPrompt = false) => {
   const rds = new RDS({ region });
 
-  for (const prNum of prNumbers) {
-    const dbId = `b2biaas-pr${prNum}`;
+  const cin = createInterface({
+    input: process.stdin,
+    output: process.stdout
+  });
+
+  if (!skipPrompt) {
+    const shouldShutdown = await new Promise(resolve => {
+      const descriptions = pulls
+        .map(pull => `[${pull.num}](https://github.com/CleoDev/crowsnest/pull/${pull.num}) -- @${pull.author} -- ${pull.title}`)
+        .join('\n');
+
+      cin.question(
+        `Are you sure you want to shutdown the DB for the following PRs (y/n): \n${descriptions}\n`,
+        answer => resolve(answer.toLowerCase() === 'y')
+      );
+    });
+
+    if (!shouldShutdown) {
+      console.log('Canceling shutdown...');
+      return;
+    }
+  }
+
+  for (const pull of pulls) {
+    const dbId = `b2biaas-pr${pull.num}`;
     try {
       const { DBInstances } = await rds.describeDBInstances({
         DBInstanceIdentifier: dbId,
@@ -43,7 +67,7 @@ const shutdownPullRds = async (region: string, prNumbers: number[]) => {
   }
 };
 
-const startUpRds = async (region: string, prNumbers: number[]) => {
+const startUpRds = async (region: string, pulls: { num: number; title: string; author: string; }[], skipPrompt = false) => {
   throw new Error('Not Implemented Yet');
 };
 
@@ -53,20 +77,25 @@ export const main = async (options: {
   cycle: 'START' | 'SHUTDOWN';
   teams: Array<'MEATBALLS' | 'SLYTHERINS' | "INCOGNITOS">;
   skipPrs: number[];
+  skipPrompt: boolean
 }) => {
   const openPulls = await getOpenPulls(options.githubToken);
   const people: string[] = options.teams.reduce((accum, teamName) => [...accum, ...teamMap[teamName]], []);
   const teamPulls = openPulls.data.filter(pull => people.indexOf(pull.user.login) >= 0);
-  const pullNumbers = teamPulls.map(pull => pull.number);
-  const pullsWithoutSkipped = difference(pullNumbers, options.skipPrs || []);
+  const pulls = teamPulls.map(pull => ({
+    num: pull.number,
+    title: pull.title,
+    author: pull.user.login,
+  }));
+  const pullsWithoutSkipped = pulls.filter(pull => (options.skipPrs || []).indexOf(pull.num) < 0);
 
   switch (options.cycle) {
     case 'START':
-      await startUpRds(options.region, pullsWithoutSkipped);
+      await startUpRds(options.region, pullsWithoutSkipped, options.skipPrompt);
       break;
 
     case 'SHUTDOWN':
-      await shutdownPullRds(options.region, pullsWithoutSkipped);
+      await shutdownPullRds(options.region, pullsWithoutSkipped, options.skipPrompt);
       break;
 
     default:
